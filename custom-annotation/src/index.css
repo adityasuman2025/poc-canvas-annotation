@@ -66,6 +66,9 @@ code {
     width: 30px;
     height: 30px;
     padding: 3px;
+
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .anotDeleteBtn {
@@ -84,14 +87,4 @@ code {
     -webkit-user-drag: none;
     user-select: none;
     -webkit-user-select: none;
-}
-
-.card {
-    padding: 10px;
-    margin: 5px 20px;
-    text-align: center;
-    border: 1px solid lightgrey;
-    border-radius: 3px;
-    cursor: pointer;
-    background-color: red;
 }
