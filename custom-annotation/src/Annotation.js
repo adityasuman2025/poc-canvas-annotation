@@ -1,8 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { ResizeProvider, ResizeConsumer } from "react-resize-context"; //ref: https://codesandbox.io/embed/jjjmp4z6yy
 
-import tickImg from "./tick.png";
-import crossImg from "./cross.png";
 import deleteImg from "./delete.png";
 import rotateImg from "./rotate.png";
 import './index.css';
@@ -19,18 +17,21 @@ const MIN_HEIGHT = 100;
 const PENCIL = "pencil";
 
 function Annotation({
-    image,
+    image = "",
     width = window.innerWidth,
     loader = "loading",
     error = "something went wrong",
+    shapes = {},
+    annotationData = [],
+    onChange,
 }) {
-    const [height, setHeight] = useState(10);
+    const [height, setHeight] = useState(10); //height 10 is loading, 400 is error
 
     const canvasRef = useRef(null);
     const ctxRef = useRef(null);
     const [isDrawingInCanvas, setIsDrawingInCanvas] = useState(false);
 
-    const [selectedBtn, setSelectedBtn] = useState("");
+    const [selectedToolBarBtn, setSelectedToolBarBtn] = useState("");
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
     const [annot, setAnnot] = useState([]);
@@ -43,11 +44,8 @@ function Annotation({
             const calcHeight = width / imgEle.width * imgEle.height;
             setHeight(calcHeight);
 
-            //retriving annotations from localStorage
-            const annotStorage = JSON.parse(localStorage.getItem("annot") || "[]");
-            setAnnot(annotStorage);
-
-            renderCanvas(calcHeight, annotStorage);
+            setAnnot(annotationData || []);
+            renderCanvas(calcHeight, annotationData);
         }
         imgEle.onerror = function () {
             setHeight(-400);
@@ -55,7 +53,7 @@ function Annotation({
     }, []);
 
     useEffect(() => {
-        if (height > 10) localStorage.setItem("annot", JSON.stringify(annot)); //storing annotations in localStorage
+        if (height > 10 && onChange) onChange(annot);
     }, [annot]);
 
 
@@ -126,7 +124,7 @@ function Annotation({
 
     /* ---- annotations stuffs ---- */
     function handleBtnClick(type) {
-        setSelectedBtn(type);
+        setSelectedToolBarBtn(type);
     }
 
     function handleAreaMouseMove({ nativeEvent = {} } = {}) {
@@ -134,9 +132,9 @@ function Annotation({
     }
 
     function handleAreaClick() {
-        if (selectedBtn === PENCIL) return;
+        if (selectedToolBarBtn === PENCIL) return;
 
-        if (selectedBtn) setAnnot([...annot, { src: selectedBtn, pos: { x: mousePos.x, y: mousePos.y } }]);
+        if (selectedToolBarBtn) setAnnot([...annot, { type: selectedToolBarBtn, pos: { x: mousePos.x, y: mousePos.y } }]);
     }
 
     function handleAnnotClick(e, idx) {
@@ -190,8 +188,6 @@ function Annotation({
         if (e.pageX && e.pageY) {
             const angle = Math.atan2(newY - centerY, newX - centerX) * (180 / Math.PI);
 
-            // if (angle <= -86 && angle >= -87) return; //because there is a sudden jump in angle for the first tym we start rotating
-
             setAnnot(annot.map((item, i) => {
                 if (i == idx) item.rotate = angle;
                 return item;
@@ -207,8 +203,10 @@ function Annotation({
     /* ---- annotations stuffs ---- */
 
 
-    function handleUndoClick() {
-        const updatedAnnot = annot.slice(0, -1)
+    function handleUndoClick(undoAll) {
+        let updatedAnnot = annot.slice(0, -1)
+        if (undoAll === true) updatedAnnot = [];
+
         setAnnot(updatedAnnot);
 
         renderImagesInCanvas(updatedAnnot); //if any canvas image is undoed then it will be removed
@@ -217,12 +215,16 @@ function Annotation({
     return (
         <div id="annotationComp" >
             <div id="toolBar" className={height <= 10 ? "disabledToolBar" : ""}>
-                <button onClick={() => handleBtnClick(tickImg)}><img src={tickImg} /></button>
-                <button onClick={() => handleBtnClick(crossImg)}><img src={crossImg} /></button>
-                <button onClick={() => handleBtnClick(PENCIL)}>{PENCIL}</button>
-                <button onClick={handleUndoClick}>undo</button>
+                {
+                    Object.keys(shapes).map(type => (
+                        <div className={selectedToolBarBtn === type ? "toolBarBtn selectedToolBarBtn" : "toolBarBtn"} key={type} onClick={() => handleBtnClick(type)}><img src={shapes[type]} /></div>
+                    ))
+                }
+
+                <div className={selectedToolBarBtn === PENCIL ? "toolBarBtn selectedToolBarBtn" : "toolBarBtn"} onClick={() => handleBtnClick(PENCIL)}>{PENCIL}</div>
+                <div className="toolBarBtn" onClick={handleUndoClick}>undo</div>
+                <div className="toolBarBtn" onClick={() => handleUndoClick(true)}>clear</div>
             </div>
-            <br />
 
             <div
                 id="area"
@@ -234,19 +236,18 @@ function Annotation({
                 <canvas
                     id="canvasEle"
                     ref={canvasRef}
-                    onMouseDown={(e) => { if (selectedBtn === PENCIL) startDraw(e) }}
-                    onMouseUp={(e) => { if (selectedBtn === PENCIL) stopDraw(e) }}
-                    onMouseMove={(e) => { if (selectedBtn === PENCIL) draw(e) }}
+                    onMouseDown={(e) => { if (selectedToolBarBtn === PENCIL) startDraw(e) }}
+                    onMouseUp={(e) => { if (selectedToolBarBtn === PENCIL) stopDraw(e) }}
+                    onMouseMove={(e) => { if (selectedToolBarBtn === PENCIL) draw(e) }}
                 />
 
                 {
-                    height <= 10 ? <div id="loaderOrError">{height === -400 ? error : loader}</div>
-                        :
+                    height <= 10 ? <div id="loaderOrError">{height === -400 ? error : loader}</div> :
                         <>
                             <img id="areaImg" src={image} />
 
                             {
-                                annot.map(({ src, pos, size, rotate = 0, type }, idx) => {
+                                annot.map(({ pos, size, rotate = 0, type }, idx) => {
                                     if (type !== PENCIL)
                                         return (
                                             <div
@@ -264,7 +265,7 @@ function Annotation({
                                                             onDrag={(e) => myDebounce(handleAnnotMoveStart, 100)(e, idx)}
                                                             onDragEnd={(e) => myDebounce(handleAnnotMoveEnd, 100)(e, idx)}
                                                         >
-                                                            <img src={src} style={rotate ? { transform: `rotate(${rotate}deg)` } : {}} />
+                                                            <img src={shapes[type]} style={rotate ? { transform: `rotate(${rotate}deg)` } : {}} />
                                                         </ResizeConsumer>
                                                     </ResizeProvider>
 
