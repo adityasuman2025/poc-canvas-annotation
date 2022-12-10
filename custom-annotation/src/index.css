@@ -1,23 +1,38 @@
-body {
-    margin: 0;
+#annotationComp {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-        sans-serif;
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-}
-
-#annotationComp {
-    display: flex;
-    align-items: center;
-    flex-direction: column;
+    max-width: 100%;
     overflow: auto;
 
     user-select: none;
     -webkit-user-select: none;
 }
 
+#loaderOrError {
+    position: sticky;
+    top: 0;
+    left: 0;
+    max-width: 100%;
+    min-width: 100%;
+    text-align: center;
+    background-color: #f1f1f1;
+    padding: 7px 0;
+}
+
 #toolBar {
+    position: sticky;
+    top: 0;
+    left: 0;
+    max-width: 100%;
+    min-width: 100%;
+    text-align: center;
+    background-color: #f1f1f1;
+    padding: 7px 0;
+    
+    overflow-x: auto;
     display: flex;
     align-content: center;
     justify-content: center;
@@ -53,30 +68,7 @@ body {
 #area {
     position: relative;
     overflow: hidden;
-    box-shadow: 1px 1px 10px 1px black;
     margin-bottom: 50px;
-}
-
-#loaderOrError {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 100;
-    height: 100%;
-    width: 100%;
-    text-align: center;
-    background-color: #f1f1f1;
-}
-
-#areaImg {
-    background-color: #f1f1f1;
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: -1;
-    width: 100%;
-    max-width: 100%;
-    min-width: 100%;
 }
 
 #canvasEle {
@@ -100,24 +92,12 @@ body {
 }
 
 .annotImg {
-    /* user-drag: none;
-    -webkit-user-drag: none; */
-    user-select: none;
-    -webkit-user-select: none;
-
-    cursor: move;
     resize: both;
     overflow: hidden;
-    display: flex;
-    align-content: center;
-    justify-content: center;
 }
 
-.annotImg img {
-    width: 90%;
-    height: 90%;
-    object-fit: fill;
-    object-position: center;
+.annotImg div {
+    cursor: grabbing;
 }
 
 .annotRotateBtn {
@@ -131,9 +111,6 @@ body {
     width: 23px;
     height: 23px;
     padding: 3px;
-
-    user-select: none;
-    -webkit-user-select: none;
 }
 
 .annotDeleteBtn {
@@ -150,6 +127,4 @@ body {
 
     user-drag: none;
     -webkit-user-drag: none;
-    user-select: none;
-    -webkit-user-select: none;
 }

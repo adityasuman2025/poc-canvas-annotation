@@ -13,15 +13,18 @@ function myDebounce(functionToRun, delay) {
     }
 }
 
-const MIN_HEIGHT = 100;
+const MIN_HEIGHT = 100, DEFAULT_WIDTH = 900;
 const PENCIL = "pencil";
+const AREA_ID = "area", ANNOTATION_COMP_ID = "annotationComp";
 
 function Annotation({
     image = "",
-    width = window.innerWidth,
+    width = DEFAULT_WIDTH,
     loader = "loading",
     error = "something went wrong",
     shapes = {},
+    beforeTools = "",
+    afterTools = "",
     annotationData = [],
     onChange,
 }) {
@@ -41,7 +44,7 @@ function Annotation({
         const imgEle = document.createElement("img");
         imgEle.src = image;
         imgEle.onload = function () {
-            const calcHeight = width / imgEle.width * imgEle.height;
+            const calcHeight = (width / imgEle.width * imgEle.height) || -400;
             setHeight(calcHeight);
 
             setAnnot(annotationData || []);
@@ -53,7 +56,7 @@ function Annotation({
     }, []);
 
     useEffect(() => {
-        if (height > 10 && onChange) onChange(annot);
+        if (height > 10 && onChange) onChange({ annotations: annot, width });
     }, [annot]);
 
 
@@ -134,7 +137,11 @@ function Annotation({
     function handleAreaClick() {
         if (selectedToolBarBtn === PENCIL) return;
 
-        if (selectedToolBarBtn) setAnnot([...annot, { type: selectedToolBarBtn, pos: { x: mousePos.x, y: mousePos.y } }]);
+        if (selectedToolBarBtn) setAnnot([...annot, {
+            type: selectedToolBarBtn,
+            pos: { x: mousePos.x, y: mousePos.y },
+            size: { height: 50, width: 50 }
+        }]);
     }
 
     function handleAnnotClick(e, idx) {
@@ -156,11 +163,13 @@ function Annotation({
     }
 
     function handleAnnotMoveStart(e, idx) {
-        const { offsetLeft: canvasOffsetLeft, offsetTop: canvasOffsetTop } = document.getElementById("area") || {};
+        const { scrollLeft, scrollTop } = document.getElementById(ANNOTATION_COMP_ID) || {};
+        const { offsetLeft: areaOffsetLeft, offsetTop: areaOffsetTop } = document.getElementById(AREA_ID) || {};
 
         const { width = 0, height = 0 } = annot[idx].size || {};
 
-        const newX = e.pageX - canvasOffsetLeft - width / 2, newY = e.pageY - canvasOffsetTop - height / 2;
+        const newX = e.pageX + scrollLeft - areaOffsetLeft - width / 2;
+        const newY = e.pageY + scrollTop - areaOffsetTop - height / 2;
         if (newX >= 0 && newY >= 0) {
             //to-do add limit condition for img top-right, bottom-left and bottom right too
             setAnnot(annot.map((item, i) => {
@@ -177,13 +186,14 @@ function Annotation({
     }
 
     function handleAnnotRotateStart(e, idx) {
-        const { offsetLeft: canvasOffsetLeft, offsetTop: canvasOffsetTop } = document.getElementById("area") || {};
+        const { scrollLeft, scrollTop } = document.getElementById(ANNOTATION_COMP_ID) || {};
+        const { offsetLeft: areaOffsetLeft, offsetTop: areaOffsetTop } = document.getElementById(AREA_ID) || {};
 
         const { x = 0, y = 0 } = annot[idx].pos || {};
         const { width = 0, height = 0 } = annot[idx].size || {};
 
         const centerX = x + width / 2, centerY = y + height / 2;
-        const newX = e.pageX - canvasOffsetLeft, newY = e.pageY - canvasOffsetTop;
+        const newX = e.pageX + scrollLeft - areaOffsetLeft, newY = e.pageY + scrollTop - areaOffsetTop;
 
         if (e.pageX && e.pageY) {
             const angle = Math.atan2(newY - centerY, newX - centerX) * (180 / Math.PI);
@@ -208,27 +218,47 @@ function Annotation({
         if (undoAll === true) updatedAnnot = [];
 
         setAnnot(updatedAnnot);
+        setSelectedToolBarBtn(""); // disabling any selected tool bar btn
 
         renderImagesInCanvas(updatedAnnot); //if any canvas image is undoed then it will be removed
     }
 
     return (
-        <div id="annotationComp" >
+        <div id={ANNOTATION_COMP_ID}>
             <div id="toolBar" className={height <= 10 ? "disabledToolBar" : ""}>
+                {beforeTools}
+
                 {
-                    Object.keys(shapes).map(type => (
-                        <div className={selectedToolBarBtn === type ? "toolBarBtn selectedToolBarBtn" : "toolBarBtn"} key={type} onClick={() => handleBtnClick(type)}><img src={shapes[type]} /></div>
+                    Object.keys(shapes).map((type, idx) => (
+                        <div
+                            key={type + "_" + idx}
+                            className={selectedToolBarBtn === type ? "toolBarBtn selectedToolBarBtn" : "toolBarBtn"}
+                            onClick={() => handleBtnClick(type)}
+                        >
+                            <img src={shapes[type]} />
+                        </div>
                     ))
                 }
 
                 <div className={selectedToolBarBtn === PENCIL ? "toolBarBtn selectedToolBarBtn" : "toolBarBtn"} onClick={() => handleBtnClick(PENCIL)}>{PENCIL}</div>
                 <div className="toolBarBtn" onClick={handleUndoClick}>undo</div>
                 <div className="toolBarBtn" onClick={() => handleUndoClick(true)}>clear</div>
+
+                {afterTools}
             </div>
 
+            {height <= 10 ? <div id="loaderOrError">{height === -400 ? error : loader}</div> : null}
+
             <div
-                id="area"
-                style={{ minWidth: width, maxWidth: width, height, minHeight: MIN_HEIGHT }}
+                id={AREA_ID}
+                style={{
+                    minWidth: width, maxWidth: width, height, minHeight: MIN_HEIGHT,
+                    backgroundImage: (height > 10 ? `url(${image})` : ""),
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "center",
+                    backgroundSize: "contain",
+                    // cursor: `url(${shapes[selectedToolBarBtn]}), auto`,
+                }}
                 onMouseMove={handleAreaMouseMove}
                 onClick={handleAreaClick}
                 onDragOver={(e) => { e.preventDefault() /* to prevent drag shadow going to old position */ }}
@@ -242,56 +272,55 @@ function Annotation({
                 />
 
                 {
-                    height <= 10 ? <div id="loaderOrError">{height === -400 ? error : loader}</div> :
-                        <>
-                            <img id="areaImg" src={image} />
+                    annot.map(({ pos = {}, size = {}, rotate = 0, type }, idx) => {
+                        if (type !== PENCIL)
+                            return (
+                                <div
+                                    className={idx == selectedAnnot ? "annot selectedAnnot" : "annot"}
+                                    key={idx}
+                                    style={{ top: pos.y, left: pos.x }}
+                                    onClick={(e) => handleAnnotClick(e, idx)}
+                                >
+                                    <div className="annotContent">
+                                        <ResizeProvider>
+                                            <ResizeConsumer className="annotImg" onSizeChanged={(size) => handleAnnotResize(size, idx)}>
+                                                <div
+                                                    style={{
+                                                        width: size.width, height: size.height,
+                                                        ...(rotate ? { transform: `rotate(${rotate}deg)` } : {}),
+                                                        backgroundImage: `url(${shapes[type]})`,
+                                                        backgroundRepeat: "no-repeat",
+                                                        backgroundPosition: "center",
+                                                        backgroundSize: "contain",
+                                                    }}
+                                                    onDrag={(e) => myDebounce(handleAnnotMoveStart, 100)(e, idx)}
+                                                    onDragEnd={(e) => myDebounce(handleAnnotMoveEnd, 100)(e, idx)}
+                                                    draggable={true}
+                                                />
+                                            </ResizeConsumer>
+                                        </ResizeProvider>
 
-                            {
-                                annot.map(({ pos, size, rotate = 0, type }, idx) => {
-                                    if (type !== PENCIL)
-                                        return (
-                                            <div
-                                                className={idx == selectedAnnot ? "annot selectedAnnot" : "annot"}
-                                                key={idx}
-                                                style={{ top: pos.y, left: pos.x }}
-                                                onClick={(e) => handleAnnotClick(e, idx)}
-                                            >
-                                                <div className="annotContent">
-                                                    <ResizeProvider>
-                                                        <ResizeConsumer
-                                                            className="annotImg"
-                                                            style={size ? { width: size.width, height: size.height } : {}}
-                                                            onSizeChanged={(size) => handleAnnotResize(size, idx)}
-                                                            onDrag={(e) => myDebounce(handleAnnotMoveStart, 100)(e, idx)}
-                                                            onDragEnd={(e) => myDebounce(handleAnnotMoveEnd, 100)(e, idx)}
-                                                        >
-                                                            <img src={shapes[type]} style={rotate ? { transform: `rotate(${rotate}deg)` } : {}} />
-                                                        </ResizeConsumer>
-                                                    </ResizeProvider>
-
-                                                    {
-                                                        idx == selectedAnnot ?
-                                                            <>
-                                                                <img
-                                                                    className="annotRotateBtn"
-                                                                    src={rotateImg}
-                                                                    onDrag={(e) => myDebounce(handleAnnotRotateStart, 100)(e, idx)}
-                                                                    onDragEnd={(e) => myDebounce(handleAnnotRotateEnd, 100)(e, idx)}
-                                                                />
-                                                                <img
-                                                                    className="annotDeleteBtn"
-                                                                    src={deleteImg}
-                                                                    onClick={(e) => handleAnnotDeleteClick(e, idx)}
-                                                                />
-                                                            </>
-                                                            : null
-                                                    }
-                                                </div>
-                                            </div>
-                                        )
-                                })
-                            }
-                        </>
+                                        {
+                                            idx == selectedAnnot ?
+                                                <>
+                                                    <img
+                                                        className="annotRotateBtn"
+                                                        src={rotateImg}
+                                                        onDrag={(e) => myDebounce(handleAnnotRotateStart, 100)(e, idx)}
+                                                        onDragEnd={(e) => myDebounce(handleAnnotRotateEnd, 100)(e, idx)}
+                                                    />
+                                                    <img
+                                                        className="annotDeleteBtn"
+                                                        src={deleteImg}
+                                                        onClick={(e) => handleAnnotDeleteClick(e, idx)}
+                                                    />
+                                                </>
+                                                : null
+                                        }
+                                    </div>
+                                </div>
+                            )
+                    })
                 }
             </div>
         </div>
